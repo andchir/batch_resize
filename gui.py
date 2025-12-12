@@ -141,11 +141,12 @@ class FileDownloaderThread(QThread):
     log = pyqtSignal(str)  # Log message
     finished = pyqtSignal(dict)  # Download statistics
 
-    def __init__(self, file_path: Path, output_folder: Path, column_index_name: int, translator):
+    def __init__(self, file_path: Path, output_folder: Path, column_index_name: int, column_index_url: int, translator):
         super().__init__()
         self.file_path = file_path
         self.output_folder = output_folder
         self.column_index_name = column_index_name
+        self.column_index_url = column_index_url
         self.translator = translator
         self._is_running = True
 
@@ -158,7 +159,7 @@ class FileDownloaderThread(QThread):
         try:
             # Read file and extract URLs with custom filenames
             self.log.emit(self.translator.get("reading_file", self.file_path))
-            url_data = read_file(self.file_path, self.column_index_name)
+            url_data = read_file(self.file_path, self.column_index_name, self.column_index_url)
 
             # Remove duplicates while preserving order
             seen = set()
@@ -726,6 +727,22 @@ class MainWindow(QMainWindow):
         column_index_layout.addStretch()
         input_layout.addLayout(column_index_layout)
 
+        # Column index for URL location
+        column_index_url_layout = QHBoxLayout()
+        self.download_column_index_url_label = QLabel(self.translator.get("column_index_url"))
+        column_index_url_layout.addWidget(self.download_column_index_url_label)
+        self.download_column_index_url_spinbox = QSpinBox()
+        self.download_column_index_url_spinbox.setMinimum(-1)
+        self.download_column_index_url_spinbox.setMaximum(100)
+        self.download_column_index_url_spinbox.setValue(-1)
+        self.download_column_index_url_spinbox.setSpecialValueText(self.translator.get("check_all_cells"))
+        self.download_column_index_url_spinbox.setToolTip(self.translator.get("column_index_url_tooltip"))
+        column_index_url_layout.addWidget(self.download_column_index_url_spinbox)
+        self.download_column_index_url_hint_label = QLabel(self.translator.get("column_index_url_hint"))
+        column_index_url_layout.addWidget(self.download_column_index_url_hint_label)
+        column_index_url_layout.addStretch()
+        input_layout.addLayout(column_index_url_layout)
+
         self.download_input_group.setLayout(input_layout)
         tab_layout.addWidget(self.download_input_group)
 
@@ -1088,8 +1105,11 @@ class MainWindow(QMainWindow):
         if column_index_name == -1:
             column_index_name = None
 
+        # Get column index for URL location
+        column_index_url = self.download_column_index_url_spinbox.value()
+
         # Start downloading thread
-        self.downloader_thread = FileDownloaderThread(file_path, output_folder, column_index_name, self.translator)
+        self.downloader_thread = FileDownloaderThread(file_path, output_folder, column_index_name, column_index_url, self.translator)
         self.downloader_thread.progress.connect(self.update_download_progress)
         self.downloader_thread.log.connect(self.add_download_log)
         self.downloader_thread.finished.connect(self.downloading_finished)
