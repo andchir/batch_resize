@@ -608,6 +608,7 @@ class MainWindow(QMainWindow):
         self.rename_type_combo.addItem("Последовательная нумерация (1, 2, 3, ...)", "sequential")
         self.rename_type_combo.addItem("Только цифры из имени", "numbers_only")
         self.rename_type_combo.addItem("Только текст из имени", "text_only")
+        self.rename_type_combo.addItem("Только число в конце имени", "numbers_only_at_end")
         rename_type_layout.addWidget(self.rename_type_combo)
         rename_type_layout.addStretch()
         input_layout.addLayout(rename_type_layout)
