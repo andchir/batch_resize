@@ -239,7 +239,7 @@ class FileRenamerThread(QThread):
     finished = pyqtSignal(dict)  # Rename statistics
 
     def __init__(self, folder_path: Path, sort_type: str, rename_type: str,
-                 prefix: str = "", suffix: str = "", dry_run: bool = False):
+                 prefix: str = "", suffix: str = "", dry_run: bool = False, zero_num: int = 0):
         super().__init__()
         self.folder_path = folder_path
         self.sort_type = sort_type
@@ -247,6 +247,7 @@ class FileRenamerThread(QThread):
         self.prefix = prefix
         self.suffix = suffix
         self.dry_run = dry_run
+        self.zero_num = zero_num
         self._is_running = True
 
     def stop(self):
@@ -279,6 +280,8 @@ class FileRenamerThread(QThread):
                 self.log.emit(f"  Префикс: '{self.prefix}'")
             if self.suffix:
                 self.log.emit(f"  Суффикс: '{self.suffix}'")
+            if self.zero_num > 0:
+                self.log.emit(f"  Дополнение нулями: {self.zero_num}")
             if self.dry_run:
                 self.log.emit(f"  Режим: Предварительный просмотр (без изменений)")
             self.log.emit("")
@@ -306,7 +309,7 @@ class FileRenamerThread(QThread):
                 try:
                     # Generate new filename
                     new_filename = generate_new_filename(
-                        file_path, index, self.rename_type, self.prefix, self.suffix
+                        file_path, index, self.rename_type, self.prefix, self.suffix, self.zero_num
                     )
 
                     # Handle duplicate names by adding a counter
@@ -630,6 +633,19 @@ class MainWindow(QMainWindow):
         suffix_layout.addWidget(self.rename_suffix_input)
         suffix_layout.addStretch()
         input_layout.addLayout(suffix_layout)
+
+        # Zero padding input
+        zero_num_layout = QHBoxLayout()
+        zero_num_layout.addWidget(QLabel("Дополнение нулями:"))
+        self.rename_zero_num_spinbox = QSpinBox()
+        self.rename_zero_num_spinbox.setMinimum(0)
+        self.rename_zero_num_spinbox.setMaximum(10)
+        self.rename_zero_num_spinbox.setValue(0)
+        self.rename_zero_num_spinbox.setToolTip("Число нулей перед числом в названии файла (0 = не используется)")
+        zero_num_layout.addWidget(self.rename_zero_num_spinbox)
+        zero_num_layout.addWidget(QLabel("(0 = не используется, 1 = 09, 2 = 009)"))
+        zero_num_layout.addStretch()
+        input_layout.addLayout(zero_num_layout)
 
         # Dry run checkbox
         self.rename_dry_run_checkbox = QCheckBox("Предварительный просмотр (не переименовывать файлы)")
@@ -960,6 +976,7 @@ class MainWindow(QMainWindow):
         prefix = self.rename_prefix_input.text()
         suffix = self.rename_suffix_input.text()
         dry_run = self.rename_dry_run_checkbox.isChecked()
+        zero_num = self.rename_zero_num_spinbox.value()
 
         # Start renaming thread
         self.renamer_thread = FileRenamerThread(
@@ -968,7 +985,8 @@ class MainWindow(QMainWindow):
             rename_type,
             prefix,
             suffix,
-            dry_run
+            dry_run,
+            zero_num
         )
         self.renamer_thread.progress.connect(self.update_rename_progress)
         self.renamer_thread.log.connect(self.add_rename_log)

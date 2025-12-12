@@ -160,7 +160,8 @@ def generate_new_filename(
     index: int,
     rename_type: str,
     prefix: str = "",
-    suffix: str = ""
+    suffix: str = "",
+    zero_num: int = 0
 ) -> str:
     """
     Generate new filename based on renaming strategy.
@@ -171,6 +172,7 @@ def generate_new_filename(
         rename_type: Renaming strategy - 'sequential', 'numbers_only', 'text_only', or 'numbers_only_at_end'
         prefix: Optional prefix to add
         suffix: Optional suffix to add
+        zero_num: Number of zeros for padding (default 0 - no padding)
 
     Returns:
         New filename string (with extension)
@@ -200,6 +202,10 @@ def generate_new_filename(
         print(f"Warning: Unknown rename type '{rename_type}', using 'sequential'")
         new_name = str(index)
 
+    # Apply zero padding if zero_num is specified and new_name is numeric
+    if zero_num > 0 and new_name.isdigit():
+        new_name = new_name.zfill(zero_num + 1)
+
     # Add prefix and suffix
     final_name = f"{prefix}{new_name}{suffix}{extension}"
 
@@ -212,7 +218,8 @@ def rename_files(
     rename_type: str,
     prefix: str = "",
     suffix: str = "",
-    dry_run: bool = False
+    dry_run: bool = False,
+    zero_num: int = 0
 ) -> Tuple[int, int]:
     """
     Rename all files in folder according to specified strategy.
@@ -224,6 +231,7 @@ def rename_files(
         prefix: Optional prefix to add to filenames
         suffix: Optional suffix to add to filenames
         dry_run: If True, only show what would be done without actually renaming
+        zero_num: Number of zeros for padding (default 0 - no padding)
 
     Returns:
         Tuple of (successful_count, failed_count)
@@ -254,7 +262,7 @@ def rename_files(
         try:
             # Generate new filename
             new_filename = generate_new_filename(
-                file_path, index, rename_type, prefix, suffix
+                file_path, index, rename_type, prefix, suffix, zero_num
             )
 
             # Handle duplicate names by adding a counter
@@ -367,6 +375,13 @@ Examples:
         help="Show what would be renamed without actually renaming files"
     )
 
+    parser.add_argument(
+        "--zero_num",
+        type=int,
+        default=0,
+        help="Number of zeros for padding numbers in filenames (default: 0 - no padding). Example: --zero_num=1 gives 09.mp4, --zero_num=2 gives 009.mp4"
+    )
+
     args = parser.parse_args()
 
     # Convert folder path to Path object
@@ -390,6 +405,8 @@ Examples:
         print(f"  Prefix: '{args.prefix}'")
     if args.suffix:
         print(f"  Suffix: '{args.suffix}'")
+    if args.zero_num > 0:
+        print(f"  Zero padding: {args.zero_num}")
     if args.dry_run:
         print(f"  Mode: DRY RUN (no actual changes)")
     print()
@@ -401,7 +418,8 @@ Examples:
         args.rename_type,
         args.prefix,
         args.suffix,
-        args.dry_run
+        args.dry_run,
+        args.zero_num
     )
 
     # Print summary
