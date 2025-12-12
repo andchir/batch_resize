@@ -1,5 +1,11 @@
 # Batch Video Resize
 
+![Screenshot1](https://github.com/andchir/batch_resize/blob/main/media/screenshot_1.jpg?raw=true)
+
+![Screenshot1](https://github.com/andchir/batch_resize/blob/main/media/screenshot_2.jpg?raw=true)
+
+![Screenshot1](https://github.com/andchir/batch_resize/blob/main/media/screenshot_3.jpg?raw=true)
+
 Набор скриптов для массовой обработки медиафайлов:
 - `main.py` - массовое изменение размеров видео в папке с использованием FFmpeg
 - `download.py` - скачивание файлов из URL-ссылок, найденных в XLS, XLSX или CSV файлах
