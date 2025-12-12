@@ -140,7 +140,7 @@ def main():
 Examples:
   python main.py /path/to/videos 720
   python main.py /path/to/videos 1080 --remove-audio
-  python main.py /path/to/videos 720 --create_thumbs
+  python main.py /path/to/videos 720 --create-thumbs
         """
     )
 
@@ -163,7 +163,7 @@ Examples:
     )
 
     parser.add_argument(
-        "--create_thumbs",
+        "--create-thumbs",
         action="store_true",
         help="Create JPG thumbnails in 'thumbs' folder (one frame from each video)"
     )
