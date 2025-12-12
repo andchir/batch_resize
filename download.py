@@ -113,57 +113,71 @@ def download_file(url: str, output_path: Path) -> bool:
         return False
 
 
-def read_csv_file(file_path: Path) -> List[str]:
+def read_csv_file(file_path: Path, column_index_name: int = None) -> List[Tuple[str, str]]:
     """
     Read CSV file and extract all URLs from cells.
 
     Args:
         file_path: Path to CSV file
+        column_index_name: Optional column index for custom filename (0-based)
 
     Returns:
-        List of URLs found in the file
+        List of tuples (URL, custom_filename) found in the file
     """
-    urls = []
+    url_data = []
 
     try:
         with open(file_path, 'r', encoding='utf-8', newline='') as f:
             reader = csv.reader(f)
             for row in reader:
+                custom_name = ""
+                if column_index_name is not None and column_index_name < len(row):
+                    custom_name = row[column_index_name].strip() if row[column_index_name] else ""
+
                 for cell in row:
                     if cell:
-                        urls.extend(extract_urls_from_text(cell))
+                        found_urls = extract_urls_from_text(cell)
+                        for url in found_urls:
+                            url_data.append((url, custom_name))
     except UnicodeDecodeError:
         # Try with different encoding
         try:
             with open(file_path, 'r', encoding='cp1251', newline='') as f:
                 reader = csv.reader(f)
                 for row in reader:
+                    custom_name = ""
+                    if column_index_name is not None and column_index_name < len(row):
+                        custom_name = row[column_index_name].strip() if row[column_index_name] else ""
+
                     for cell in row:
                         if cell:
-                            urls.extend(extract_urls_from_text(cell))
+                            found_urls = extract_urls_from_text(cell)
+                            for url in found_urls:
+                                url_data.append((url, custom_name))
         except Exception as e:
             print(f"Error reading CSV file {file_path}: {str(e)}")
     except Exception as e:
         print(f"Error reading CSV file {file_path}: {str(e)}")
 
-    return urls
+    return url_data
 
 
-def read_xlsx_file(file_path: Path) -> List[str]:
+def read_xlsx_file(file_path: Path, column_index_name: int = None) -> List[Tuple[str, str]]:
     """
     Read XLSX file and extract all URLs from cells.
 
     Args:
         file_path: Path to XLSX file
+        column_index_name: Optional column index for custom filename (0-based)
 
     Returns:
-        List of URLs found in the file
+        List of tuples (URL, custom_filename) found in the file
     """
     if not OPENPYXL_AVAILABLE:
         print("Error: openpyxl library is not installed. Install it with: pip install openpyxl")
         return []
 
-    urls = []
+    url_data = []
 
     try:
         workbook = openpyxl.load_workbook(file_path, data_only=True)
@@ -172,39 +186,49 @@ def read_xlsx_file(file_path: Path) -> List[str]:
         for sheet_name in workbook.sheetnames:
             sheet = workbook[sheet_name]
 
-            # Iterate through all cells
+            # Iterate through all rows
             for row in sheet.iter_rows():
+                custom_name = ""
+                if column_index_name is not None and column_index_name < len(row):
+                    cell_value = row[column_index_name].value
+                    custom_name = str(cell_value).strip() if cell_value else ""
+
                 for cell in row:
                     if cell.value:
+                        found_urls = []
                         # Check if cell has a hyperlink
                         if cell.hyperlink and cell.hyperlink.target:
-                            urls.append(cell.hyperlink.target)
+                            found_urls.append(cell.hyperlink.target)
 
                         # Also check cell value for URLs
-                        urls.extend(extract_urls_from_text(str(cell.value)))
+                        found_urls.extend(extract_urls_from_text(str(cell.value)))
+
+                        for url in found_urls:
+                            url_data.append((url, custom_name))
 
         workbook.close()
     except Exception as e:
         print(f"Error reading XLSX file {file_path}: {str(e)}")
 
-    return urls
+    return url_data
 
 
-def read_xls_file(file_path: Path) -> List[str]:
+def read_xls_file(file_path: Path, column_index_name: int = None) -> List[Tuple[str, str]]:
     """
     Read XLS file and extract all URLs from cells.
 
     Args:
         file_path: Path to XLS file
+        column_index_name: Optional column index for custom filename (0-based)
 
     Returns:
-        List of URLs found in the file
+        List of tuples (URL, custom_filename) found in the file
     """
     if not XLRD_AVAILABLE:
         print("Error: xlrd library is not installed. Install it with: pip install xlrd")
         return []
 
-    urls = []
+    url_data = []
 
     try:
         workbook = xlrd.open_workbook(file_path)
@@ -213,48 +237,60 @@ def read_xls_file(file_path: Path) -> List[str]:
         for sheet_index in range(workbook.nsheets):
             sheet = workbook.sheet_by_index(sheet_index)
 
-            # Iterate through all cells
+            # Iterate through all rows
             for row_index in range(sheet.nrows):
+                custom_name = ""
+                if column_index_name is not None and column_index_name < sheet.ncols:
+                    cell_value = sheet.cell(row_index, column_index_name).value
+                    custom_name = str(cell_value).strip() if cell_value else ""
+
                 for col_index in range(sheet.ncols):
                     cell = sheet.cell(row_index, col_index)
                     if cell.value:
-                        urls.extend(extract_urls_from_text(str(cell.value)))
+                        found_urls = extract_urls_from_text(str(cell.value))
+                        for url in found_urls:
+                            url_data.append((url, custom_name))
 
         # Also check for hyperlinks
         try:
             for sheet_index in range(workbook.nsheets):
                 sheet = workbook.sheet_by_index(sheet_index)
                 if hasattr(sheet, 'hyperlink_map'):
-                    for link in sheet.hyperlink_map.values():
+                    for row_index, link in sheet.hyperlink_map.items():
                         if link.url_or_path:
-                            urls.append(link.url_or_path)
+                            custom_name = ""
+                            if column_index_name is not None and column_index_name < sheet.ncols:
+                                cell_value = sheet.cell(row_index, column_index_name).value
+                                custom_name = str(cell_value).strip() if cell_value else ""
+                            url_data.append((link.url_or_path, custom_name))
         except:
             pass  # Hyperlinks not available in this version
 
     except Exception as e:
         print(f"Error reading XLS file {file_path}: {str(e)}")
 
-    return urls
+    return url_data
 
 
-def read_file(file_path: Path) -> List[str]:
+def read_file(file_path: Path, column_index_name: int = None) -> List[Tuple[str, str]]:
     """
     Read file and extract URLs based on file extension.
 
     Args:
         file_path: Path to the file
+        column_index_name: Optional column index for custom filename (0-based)
 
     Returns:
-        List of URLs found in the file
+        List of tuples (URL, custom_filename) found in the file
     """
     suffix = file_path.suffix.lower()
 
     if suffix == '.csv':
-        return read_csv_file(file_path)
+        return read_csv_file(file_path, column_index_name)
     elif suffix == '.xlsx':
-        return read_xlsx_file(file_path)
+        return read_xlsx_file(file_path, column_index_name)
     elif suffix == '.xls':
-        return read_xls_file(file_path)
+        return read_xls_file(file_path, column_index_name)
     else:
         print(f"Error: Unsupported file format '{suffix}'. Supported formats: .xls, .xlsx, .csv")
         return []
@@ -285,6 +321,13 @@ Examples:
         help="Path to folder where to download files"
     )
 
+    parser.add_argument(
+        "--column-index-name",
+        type=int,
+        default=None,
+        help="Column index (0-based) for custom filename. If specified, use value from this column as filename"
+    )
+
     args = parser.parse_args()
 
     # Convert paths to Path objects
@@ -304,45 +347,90 @@ Examples:
     folder_path.mkdir(parents=True, exist_ok=True)
     print(f"Output directory: {folder_path}")
 
-    # Read file and extract URLs
+    # Read file and extract URLs with custom filenames
     print(f"Reading file: {file_path}")
-    urls = read_file(file_path)
+    url_data = read_file(file_path, args.column_index_name)
 
     # Remove duplicates while preserving order
     seen = set()
-    unique_urls = []
-    for url in urls:
+    unique_url_data = []
+    for url, custom_name in url_data:
         if url not in seen:
             seen.add(url)
-            unique_urls.append(url)
+            unique_url_data.append((url, custom_name))
 
-    if not unique_urls:
+    if not unique_url_data:
         print("No URLs found in the file.")
         sys.exit(0)
 
-    print(f"Found {len(unique_urls)} unique URL(s) in the file")
+    print(f"Found {len(unique_url_data)} unique URL(s) in the file")
 
     # Download each file
     successful = 0
     failed = 0
     skipped = 0
+    renamed = 0
 
-    for i, url in enumerate(unique_urls, 1):
-        print(f"\n[{i}/{len(unique_urls)}] Processing: {url}")
+    for i, (url, custom_name) in enumerate(unique_url_data, 1):
+        print(f"\n[{i}/{len(unique_url_data)}] Processing: {url}")
 
         # Get filename from URL
-        filename = get_filename_from_url(url)
-        output_path = folder_path / filename
+        original_filename = get_filename_from_url(url)
+        original_path = folder_path / original_filename
 
-        # Check if file already exists
-        if output_path.exists():
-            print(f"Skipped (already exists): {filename}")
+        # Determine final filename
+        final_filename = original_filename
+        final_path = original_path
+
+        if custom_name:
+            # Preserve file extension from original filename
+            original_ext = Path(original_filename).suffix
+            # If custom_name already has extension, use it as is, otherwise add original extension
+            if Path(custom_name).suffix:
+                final_filename = custom_name
+            else:
+                final_filename = custom_name + original_ext
+            final_path = folder_path / final_filename
+
+        # Check if final file already exists
+        if final_path.exists():
+            print(f"Skipped (already exists): {final_filename}")
             skipped += 1
             continue
 
-        # Download the file
-        if download_file(url, output_path):
-            print(f"Downloaded: {filename}")
+        # Check if original file already exists
+        if original_path.exists() and original_path != final_path:
+            # File with original name exists, and we have a custom name
+            if custom_name:
+                # Rename the existing file
+                try:
+                    original_path.rename(final_path)
+                    print(f"Renamed existing file: {original_filename} -> {final_filename}")
+                    renamed += 1
+                    skipped += 1
+                    continue
+                except Exception as e:
+                    print(f"Error renaming {original_filename}: {str(e)}")
+                    failed += 1
+                    continue
+            else:
+                # No custom name, file already exists
+                print(f"Skipped (already exists): {original_filename}")
+                skipped += 1
+                continue
+
+        # Download the file to original path first
+        if download_file(url, original_path):
+            # If we have a custom name and it's different from original, rename
+            if custom_name and final_path != original_path:
+                try:
+                    original_path.rename(final_path)
+                    print(f"Downloaded and renamed: {final_filename}")
+                    renamed += 1
+                except Exception as e:
+                    print(f"Downloaded as {original_filename}, but failed to rename: {str(e)}")
+            else:
+                print(f"Downloaded: {original_filename}")
             successful += 1
         else:
             failed += 1
@@ -353,7 +441,9 @@ Examples:
     print(f"Successful: {successful}")
     print(f"Failed: {failed}")
     print(f"Skipped: {skipped}")
-    print(f"Total URLs: {len(unique_urls)}")
+    if renamed > 0:
+        print(f"Renamed: {renamed}")
+    print(f"Total URLs: {len(unique_url_data)}")
     print("=" * 50)
 
 

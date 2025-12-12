@@ -90,6 +90,13 @@ class Translations:
         "file_not_exists": "File '{}' does not exist or is not a file",
         "unsupported_format": "Only XLS, XLSX, CSV formats are supported",
         "please_select_download_folder": "Please select a folder to download files",
+        "column_index_name": "Column index for filename:",
+        "column_index_name_tooltip": "Column index (0-based) to use for custom filename. -1 = not used",
+        "column_index_name_hint": "(-1 = not used, 0 = first column, 1 = second, etc.)",
+        "not_used": "Not used",
+        "renamed_existing": "Renamed existing file: {} -> {}",
+        "downloaded_renamed": "Downloaded and renamed: {}",
+        "downloaded_rename_failed": "Downloaded as {}, but failed to rename: {}",
 
         # File Rename Tab
         "rename_title": "Batch File Rename",
@@ -224,6 +231,13 @@ class Translations:
         "file_not_exists": "Файл '{}' не существует или не является файлом",
         "unsupported_format": "Поддерживаются только файлы форматов: XLS, XLSX, CSV",
         "please_select_download_folder": "Пожалуйста, выберите папку для загрузки файлов",
+        "column_index_name": "Индекс колонки для имени файла:",
+        "column_index_name_tooltip": "Индекс колонки (начиная с 0) для пользовательского имени файла. -1 = не используется",
+        "column_index_name_hint": "(-1 = не используется, 0 = первая колонка, 1 = вторая и т.д.)",
+        "not_used": "Не используется",
+        "renamed_existing": "Переименован существующий файл: {} -> {}",
+        "downloaded_renamed": "Загружено и переименовано: {}",
+        "downloaded_rename_failed": "Загружено как {}, но не удалось переименовать: {}",
 
         # File Rename Tab
         "rename_title": "Массовое переименование файлов",

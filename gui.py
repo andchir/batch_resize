@@ -141,10 +141,11 @@ class FileDownloaderThread(QThread):
     log = pyqtSignal(str)  # Log message
     finished = pyqtSignal(dict)  # Download statistics
 
-    def __init__(self, file_path: Path, output_folder: Path, translator):
+    def __init__(self, file_path: Path, output_folder: Path, column_index_name: int, translator):
         super().__init__()
         self.file_path = file_path
         self.output_folder = output_folder
+        self.column_index_name = column_index_name
         self.translator = translator
         self._is_running = True
 
@@ -155,29 +156,30 @@ class FileDownloaderThread(QThread):
     def run(self):
         """Download files in background thread."""
         try:
-            # Read file and extract URLs
+            # Read file and extract URLs with custom filenames
             self.log.emit(self.translator.get("reading_file", self.file_path))
-            urls = read_file(self.file_path)
+            url_data = read_file(self.file_path, self.column_index_name)
 
             # Remove duplicates while preserving order
             seen = set()
-            unique_urls = []
-            for url in urls:
+            unique_url_data = []
+            for url, custom_name in url_data:
                 if url not in seen:
                     seen.add(url)
-                    unique_urls.append(url)
+                    unique_url_data.append((url, custom_name))
 
-            if not unique_urls:
+            if not unique_url_data:
                 self.log.emit(self.translator.get("urls_not_found"))
                 self.finished.emit({
                     'successful': 0,
                     'failed': 0,
                     'skipped': 0,
+                    'renamed': 0,
                     'total': 0
                 })
                 return
 
-            self.log.emit(self.translator.get("urls_found", len(unique_urls)))
+            self.log.emit(self.translator.get("urls_found", len(unique_url_data)))
 
             # Create output folder if it doesn't exist
             self.output_folder.mkdir(parents=True, exist_ok=True)
@@ -187,33 +189,84 @@ class FileDownloaderThread(QThread):
             successful = 0
             failed = 0
             skipped = 0
+            renamed = 0
 
-            for idx, url in enumerate(unique_urls):
+            for idx, (url, custom_name) in enumerate(unique_url_data):
                 if not self._is_running:
                     self.log.emit(self.translator.get("processing_stopped"))
                     break
 
-                self.log.emit(self.translator.get("processing_url", idx + 1, len(unique_urls), url))
+                self.log.emit(self.translator.get("processing_url", idx + 1, len(unique_url_data), url))
 
                 # Get filename from URL
-                filename = get_filename_from_url(url)
-                output_path = self.output_folder / filename
+                original_filename = get_filename_from_url(url)
+                original_path = self.output_folder / original_filename
 
-                # Check if file already exists
-                if output_path.exists():
-                    self.log.emit(self.translator.get("skipped_exists", filename))
-                    skipped += 1
-                else:
-                    # Download the file
-                    if download_file(url, output_path):
-                        self.log.emit(self.translator.get("downloaded", filename))
-                        successful += 1
+                # Determine final filename
+                final_filename = original_filename
+                final_path = original_path
+
+                if custom_name:
+                    # Preserve file extension from original filename
+                    original_ext = Path(original_filename).suffix
+                    # If custom_name already has extension, use it as is, otherwise add original extension
+                    if Path(custom_name).suffix:
+                        final_filename = custom_name
                     else:
-                        self.log.emit(self.translator.get("download_error", url))
-                        failed += 1
+                        final_filename = custom_name + original_ext
+                    final_path = self.output_folder / final_filename
+
+                # Check if final file already exists
+                if final_path.exists():
+                    self.log.emit(self.translator.get("skipped_exists", final_filename))
+                    skipped += 1
+                    # Update progress
+                    progress_percent = int((idx + 1) / len(unique_url_data) * 100)
+                    self.progress.emit(progress_percent)
+                    continue
+
+                # Check if original file already exists
+                if original_path.exists() and original_path != final_path:
+                    # File with original name exists, and we have a custom name
+                    if custom_name:
+                        # Rename the existing file
+                        try:
+                            original_path.rename(final_path)
+                            self.log.emit(self.translator.get("renamed_existing", original_filename, final_filename))
+                            renamed += 1
+                            skipped += 1
+                        except Exception as e:
+                            self.log.emit(self.translator.get("rename_error", original_filename, str(e)))
+                            failed += 1
+                    else:
+                        # No custom name, file already exists
+                        self.log.emit(self.translator.get("skipped_exists", original_filename))
+                        skipped += 1
+
+                    # Update progress
+                    progress_percent = int((idx + 1) / len(unique_url_data) * 100)
+                    self.progress.emit(progress_percent)
+                    continue
+
+                # Download the file to original path first
+                if download_file(url, original_path):
+                    # If we have a custom name and it's different from original, rename
+                    if custom_name and final_path != original_path:
+                        try:
+                            original_path.rename(final_path)
+                            self.log.emit(self.translator.get("downloaded_renamed", final_filename))
+                            renamed += 1
+                        except Exception as e:
+                            self.log.emit(self.translator.get("downloaded_rename_failed", original_filename, str(e)))
+                    else:
+                        self.log.emit(self.translator.get("downloaded", original_filename))
+                    successful += 1
+                else:
+                    self.log.emit(self.translator.get("download_error", url))
+                    failed += 1
 
                 # Update progress
-                progress_percent = int((idx + 1) / len(unique_urls) * 100)
+                progress_percent = int((idx + 1) / len(unique_url_data) * 100)
                 self.progress.emit(progress_percent)
 
             # Emit final statistics
@@ -221,7 +274,8 @@ class FileDownloaderThread(QThread):
                 'successful': successful,
                 'failed': failed,
                 'skipped': skipped,
-                'total': len(unique_urls)
+                'renamed': renamed,
+                'total': len(unique_url_data)
             })
 
         except Exception as e:
@@ -230,6 +284,7 @@ class FileDownloaderThread(QThread):
                 'successful': 0,
                 'failed': 0,
                 'skipped': 0,
+                'renamed': 0,
                 'total': 0
             })
 
@@ -477,6 +532,10 @@ class MainWindow(QMainWindow):
         self.download_folder_label.setText(self.translator.get("download_folder"))
         self.download_folder_input.setPlaceholderText(self.translator.get("select_download_folder"))
         self.download_browse_folder_button.setText(self.translator.get("browse"))
+        self.download_column_index_label.setText(self.translator.get("column_index_name"))
+        self.download_column_index_spinbox.setSpecialValueText(self.translator.get("not_used"))
+        self.download_column_index_spinbox.setToolTip(self.translator.get("column_index_name_tooltip"))
+        self.download_column_index_hint_label.setText(self.translator.get("column_index_name_hint"))
         self.download_log_group.setTitle(self.translator.get("download_log"))
         self.download_start_button.setText(self.translator.get("start_download"))
         self.download_stop_button.setText(self.translator.get("stop"))
@@ -650,6 +709,22 @@ class MainWindow(QMainWindow):
         self.download_browse_folder_button.clicked.connect(self.browse_download_folder)
         output_folder_layout.addWidget(self.download_browse_folder_button)
         input_layout.addLayout(output_folder_layout)
+
+        # Column index for custom filename
+        column_index_layout = QHBoxLayout()
+        self.download_column_index_label = QLabel(self.translator.get("column_index_name"))
+        column_index_layout.addWidget(self.download_column_index_label)
+        self.download_column_index_spinbox = QSpinBox()
+        self.download_column_index_spinbox.setMinimum(-1)
+        self.download_column_index_spinbox.setMaximum(100)
+        self.download_column_index_spinbox.setValue(-1)
+        self.download_column_index_spinbox.setSpecialValueText(self.translator.get("not_used"))
+        self.download_column_index_spinbox.setToolTip(self.translator.get("column_index_name_tooltip"))
+        column_index_layout.addWidget(self.download_column_index_spinbox)
+        self.download_column_index_hint_label = QLabel(self.translator.get("column_index_name_hint"))
+        column_index_layout.addWidget(self.download_column_index_hint_label)
+        column_index_layout.addStretch()
+        input_layout.addLayout(column_index_layout)
 
         self.download_input_group.setLayout(input_layout)
         tab_layout.addWidget(self.download_input_group)
@@ -1008,8 +1083,13 @@ class MainWindow(QMainWindow):
         self.download_browse_file_button.setEnabled(False)
         self.download_browse_folder_button.setEnabled(False)
 
+        # Get column index for custom filename
+        column_index_name = self.download_column_index_spinbox.value()
+        if column_index_name == -1:
+            column_index_name = None
+
         # Start downloading thread
-        self.downloader_thread = FileDownloaderThread(file_path, output_folder, self.translator)
+        self.downloader_thread = FileDownloaderThread(file_path, output_folder, column_index_name, self.translator)
         self.downloader_thread.progress.connect(self.update_download_progress)
         self.downloader_thread.log.connect(self.add_download_log)
         self.downloader_thread.finished.connect(self.downloading_finished)
@@ -1050,6 +1130,8 @@ class MainWindow(QMainWindow):
         self.add_download_log(self.translator.get("successful", stats['successful']))
         self.add_download_log(self.translator.get("errors", stats['failed']))
         self.add_download_log(self.translator.get("skipped", stats['skipped']))
+        if stats.get('renamed', 0) > 0:
+            self.add_download_log(self.translator.get("renamed", stats['renamed']))
         self.add_download_log(self.translator.get("total_urls", stats['total']))
         self.add_download_log("=" * 50)
 
