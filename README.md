@@ -70,11 +70,17 @@ python main.py ~/Videos 1080
 python main.py ~/Videos 720 --remove_audio
 ```
 
+Создать миниатюры (thumbnails) из видео:
+```bash
+python main.py ~/Videos 720 --create_thumbs
+```
+
 ### Параметры
 
 - `folder` - путь к папке с видеофайлами (обязательный)
 - `height` - целевая высота в пикселях (обязательный)
 - `--remove_audio` - удалить звуковую дорожку из выходных видео (необязательный)
+- `--create_thumbs` - создать JPG миниатюры в папке "thumbs" (один кадр из каждого видео) (необязательный)
 
 ### Поддерживаемые форматы
 
@@ -96,6 +102,10 @@ python main.py ~/Videos 720 --remove_audio
 
 Например, если исходная папка `/home/user/Videos`, то обработанные видео будут в `/home/user/Videos/output`.
 
+Если используется параметр `--create_thumbs`, миниатюры (JPG файлы) сохраняются в подпапке `thumbs` внутри исходной папки с видео.
+
+Например, если исходная папка `/home/user/Videos`, то миниатюры будут в `/home/user/Videos/thumbs`.
+
 ## Настройки кодирования
 
 Скрипт использует следующие настройки для кодирования:
@@ -108,6 +118,8 @@ python main.py ~/Videos 720 --remove_audio
 - **Битрейт аудио:** 128 kbps
 
 ## Пример вывода
+
+### Без создания миниатюр
 
 ```
 Found 3 video file(s) in '/home/user/Videos'
@@ -124,6 +136,35 @@ Processing complete!
 Successful: 3
 Failed: 0
 Total: 3
+==================================================
+```
+
+### С созданием миниатюр (--create_thumbs)
+
+```
+Found 3 video file(s) in '/home/user/Videos'
+Output directory: /home/user/Videos/output
+Thumbnails directory: /home/user/Videos/thumbs
+Processing: video1.mp4
+Completed: video1.mp4
+Creating thumbnail: video1.jpg
+Thumbnail created: video1.jpg
+Processing: video2.mkv
+Completed: video2.mkv
+Creating thumbnail: video2.jpg
+Thumbnail created: video2.jpg
+Processing: video3.avi
+Completed: video3.avi
+Creating thumbnail: video3.jpg
+Thumbnail created: video3.jpg
+
+==================================================
+Processing complete!
+Successful: 3
+Failed: 0
+Total: 3
+Thumbnails created: 3
+Thumbnails failed: 0
 ==================================================
 ```
 
