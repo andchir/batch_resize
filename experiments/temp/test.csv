@@ -1,0 +1,6 @@
+Name,URL,Description
+Python Logo,https://www.python.org/static/img/python-logo.png,Python programming language logo
+Sample Text,https://www.example.com/sample.txt,A sample text file
+GitHub Logo,https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png,GitHub mark logo
+No URL here,Just some text,This row has no URL
+Multiple URLs,Check https://www.python.org and https://www.github.com,Two URLs in one cell
