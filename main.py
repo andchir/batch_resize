@@ -157,7 +157,7 @@ Examples:
     )
 
     parser.add_argument(
-        "--remove_audio",
+        "--remove-audio",
         action="store_true",
         help="Remove audio track from output videos"
     )
