@@ -212,7 +212,7 @@ Examples:
         if args.create_thumbs:
             thumb_path = thumbs_dir / f"{video_file.stem}.jpg"
             print(f"Creating thumbnail: {thumb_path.name}")
-            if create_thumbnail(video_file, thumb_path):
+            if create_thumbnail(output_path, thumb_path):
                 thumbs_created += 1
                 print(f"Thumbnail created: {thumb_path.name}")
             else:
