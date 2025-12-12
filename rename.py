@@ -32,6 +32,53 @@ def extract_number_from_filename(filename: str) -> Tuple[int, str]:
     return (0, filename)
 
 
+def natural_sort_key(filename: str) -> List:
+    """
+    Generate a sort key for natural sorting (comparing numbers as integers).
+
+    Args:
+        filename: The filename to generate key from
+
+    Returns:
+        List of mixed strings and integers for natural comparison
+
+    Example:
+        "file10.txt" -> ["file", 10, ".txt"]
+        "file2.txt" -> ["file", 2, ".txt"]
+        This way file2.txt comes before file10.txt
+    """
+    parts = []
+    for part in re.split(r'(\d+)', filename):
+        if part.isdigit():
+            parts.append(int(part))
+        else:
+            parts.append(part.lower())
+    return parts
+
+
+def extract_number_at_end(filename: str) -> int:
+    """
+    Extract the last number in the filename (before extension) if it's preceded by a non-digit.
+
+    Args:
+        filename: The filename (stem, without extension) to extract number from
+
+    Returns:
+        The number at the end, or 0 if no valid number found
+
+    Example:
+        "PreviewFemale3D_9" -> 9
+        "PreviewFemale3D_10" -> 10
+        "file123" -> 0 (no non-digit before the number)
+        "abc" -> 0 (no number)
+    """
+    # Match a non-digit followed by one or more digits at the end
+    match = re.search(r'\D(\d+)$', filename)
+    if match:
+        return int(match.group(1))
+    return 0
+
+
 def extract_text_only(filename: str) -> str:
     """
     Remove all digits from filename, keeping only text and other characters.
@@ -98,14 +145,11 @@ def sort_files(files: List[Path], sort_type: str) -> List[Path]:
         Sorted list of Path objects
     """
     if sort_type == 'name':
-        # Sort by full filename alphabetically
+        # Sort by full filename alphabetically (case-insensitive)
         return sorted(files, key=lambda f: f.name.lower())
     elif sort_type == 'number':
-        # Sort by number found in filename (if any), then by name
-        def sort_key(f):
-            number, text = extract_number_from_filename(f.stem)
-            return (number, f.name.lower())
-        return sorted(files, key=sort_key)
+        # Sort using natural sorting (numbers compared as integers)
+        return sorted(files, key=lambda f: natural_sort_key(f.name))
     else:
         print(f"Warning: Unknown sort type '{sort_type}', using 'name'")
         return sorted(files, key=lambda f: f.name.lower())
@@ -124,7 +168,7 @@ def generate_new_filename(
     Args:
         file_path: Original file Path object
         index: Sequential index (1-based) for this file
-        rename_type: Renaming strategy - 'sequential', 'numbers_only', or 'text_only'
+        rename_type: Renaming strategy - 'sequential', 'numbers_only', 'text_only', or 'numbers_only_at_end'
         prefix: Optional prefix to add
         suffix: Optional suffix to add
 
@@ -147,6 +191,11 @@ def generate_new_filename(
         # Clean up multiple spaces and trim
         text = re.sub(r'\s+', ' ', text).strip()
         new_name = text if text else f"file_{index}"
+    elif rename_type == 'numbers_only_at_end':
+        # Extract the number at the end of filename (if preceded by non-digit)
+        # If no such number exists, use sequential index
+        number = extract_number_at_end(stem)
+        new_name = str(number) if number > 0 else str(index)
     else:
         print(f"Warning: Unknown rename type '{rename_type}', using 'sequential'")
         new_name = str(index)
@@ -171,7 +220,7 @@ def rename_files(
     Args:
         folder_path: Path to folder containing files
         sort_type: Sorting strategy - 'name' or 'number'
-        rename_type: Renaming strategy - 'sequential', 'numbers_only', or 'text_only'
+        rename_type: Renaming strategy - 'sequential', 'numbers_only', 'text_only', or 'numbers_only_at_end'
         prefix: Optional prefix to add to filenames
         suffix: Optional suffix to add to filenames
         dry_run: If True, only show what would be done without actually renaming
@@ -251,12 +300,14 @@ def main():
         epilog="""
 Sort types:
   name      Sort files alphabetically by name
-  number    Sort files by number found in filename (text is ignored)
+  number    Sort files using natural/numeric sorting (e.g., file2 before file10)
 
 Rename types:
-  sequential     Rename files with sequential numbers (1, 2, 3, ...)
-  numbers_only   Keep only numbers from original filename (remove text)
-  text_only      Keep only text from original filename (remove numbers)
+  sequential           Rename files with sequential numbers (1, 2, 3, ...)
+  numbers_only         Keep only numbers from original filename (remove text)
+  text_only            Keep only text from original filename (remove numbers)
+  numbers_only_at_end  Keep only the number at the end of filename (if preceded by non-digit)
+                       If no such number exists, use sequential index instead
 
 Examples:
   # Rename files sequentially with prefix
@@ -270,6 +321,9 @@ Examples:
 
   # Combine prefix and suffix
   python rename.py /path/to/folder number numbers_only --prefix "img_" --suffix "_final"
+
+  # Extract trailing numbers: file_9.mp4 -> 9.mp4, file_10.mp4 -> 10.mp4
+  python rename.py /path/to/folder number numbers_only_at_end
         """
     )
 
@@ -289,7 +343,7 @@ Examples:
     parser.add_argument(
         "rename_type",
         type=str,
-        choices=['sequential', 'numbers_only', 'text_only'],
+        choices=['sequential', 'numbers_only', 'text_only', 'numbers_only_at_end'],
         help="How to generate new filenames"
     )
 
