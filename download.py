@@ -113,13 +113,14 @@ def download_file(url: str, output_path: Path) -> bool:
         return False
 
 
-def read_csv_file(file_path: Path, column_index_name: int = None) -> List[Tuple[str, str]]:
+def read_csv_file(file_path: Path, column_index_name: int = None, column_index_url: int = -1) -> List[Tuple[str, str]]:
     """
     Read CSV file and extract all URLs from cells.
 
     Args:
         file_path: Path to CSV file
         column_index_name: Optional column index for custom filename (0-based)
+        column_index_url: Column index where URLs are located (0-based). If -1, check all cells.
 
     Returns:
         List of tuples (URL, custom_filename) found in the file
@@ -134,7 +135,15 @@ def read_csv_file(file_path: Path, column_index_name: int = None) -> List[Tuple[
                 if column_index_name is not None and column_index_name < len(row):
                     custom_name = row[column_index_name].strip() if row[column_index_name] else ""
 
-                for cell in row:
+                # Determine which cells to check for URLs
+                if column_index_url >= 0:
+                    # Check only the specified column
+                    cells_to_check = [row[column_index_url]] if column_index_url < len(row) else []
+                else:
+                    # Check all cells
+                    cells_to_check = row
+
+                for cell in cells_to_check:
                     if cell:
                         found_urls = extract_urls_from_text(cell)
                         for url in found_urls:
@@ -149,7 +158,15 @@ def read_csv_file(file_path: Path, column_index_name: int = None) -> List[Tuple[
                     if column_index_name is not None and column_index_name < len(row):
                         custom_name = row[column_index_name].strip() if row[column_index_name] else ""
 
-                    for cell in row:
+                    # Determine which cells to check for URLs
+                    if column_index_url >= 0:
+                        # Check only the specified column
+                        cells_to_check = [row[column_index_url]] if column_index_url < len(row) else []
+                    else:
+                        # Check all cells
+                        cells_to_check = row
+
+                    for cell in cells_to_check:
                         if cell:
                             found_urls = extract_urls_from_text(cell)
                             for url in found_urls:
@@ -162,13 +179,14 @@ def read_csv_file(file_path: Path, column_index_name: int = None) -> List[Tuple[
     return url_data
 
 
-def read_xlsx_file(file_path: Path, column_index_name: int = None) -> List[Tuple[str, str]]:
+def read_xlsx_file(file_path: Path, column_index_name: int = None, column_index_url: int = -1) -> List[Tuple[str, str]]:
     """
     Read XLSX file and extract all URLs from cells.
 
     Args:
         file_path: Path to XLSX file
         column_index_name: Optional column index for custom filename (0-based)
+        column_index_url: Column index where URLs are located (0-based). If -1, check all cells.
 
     Returns:
         List of tuples (URL, custom_filename) found in the file
@@ -193,7 +211,15 @@ def read_xlsx_file(file_path: Path, column_index_name: int = None) -> List[Tuple
                     cell_value = row[column_index_name].value
                     custom_name = str(cell_value).strip() if cell_value else ""
 
-                for cell in row:
+                # Determine which cells to check for URLs
+                if column_index_url >= 0:
+                    # Check only the specified column
+                    cells_to_check = [row[column_index_url]] if column_index_url < len(row) else []
+                else:
+                    # Check all cells
+                    cells_to_check = row
+
+                for cell in cells_to_check:
                     if cell.value:
                         found_urls = []
                         # Check if cell has a hyperlink
@@ -213,13 +239,14 @@ def read_xlsx_file(file_path: Path, column_index_name: int = None) -> List[Tuple
     return url_data
 
 
-def read_xls_file(file_path: Path, column_index_name: int = None) -> List[Tuple[str, str]]:
+def read_xls_file(file_path: Path, column_index_name: int = None, column_index_url: int = -1) -> List[Tuple[str, str]]:
     """
     Read XLS file and extract all URLs from cells.
 
     Args:
         file_path: Path to XLS file
         column_index_name: Optional column index for custom filename (0-based)
+        column_index_url: Column index where URLs are located (0-based). If -1, check all cells.
 
     Returns:
         List of tuples (URL, custom_filename) found in the file
@@ -244,7 +271,15 @@ def read_xls_file(file_path: Path, column_index_name: int = None) -> List[Tuple[
                     cell_value = sheet.cell(row_index, column_index_name).value
                     custom_name = str(cell_value).strip() if cell_value else ""
 
-                for col_index in range(sheet.ncols):
+                # Determine which columns to check for URLs
+                if column_index_url >= 0:
+                    # Check only the specified column
+                    cols_to_check = [column_index_url] if column_index_url < sheet.ncols else []
+                else:
+                    # Check all columns
+                    cols_to_check = range(sheet.ncols)
+
+                for col_index in cols_to_check:
                     cell = sheet.cell(row_index, col_index)
                     if cell.value:
                         found_urls = extract_urls_from_text(str(cell.value))
@@ -258,6 +293,12 @@ def read_xls_file(file_path: Path, column_index_name: int = None) -> List[Tuple[
                 if hasattr(sheet, 'hyperlink_map'):
                     for row_index, link in sheet.hyperlink_map.items():
                         if link.url_or_path:
+                            # If column_index_url is specified, skip hyperlinks not in that column
+                            if column_index_url >= 0:
+                                # We can't easily determine which column a hyperlink is in from xlrd
+                                # So we skip hyperlink processing when column_index_url is specified
+                                continue
+
                             custom_name = ""
                             if column_index_name is not None and column_index_name < sheet.ncols:
                                 cell_value = sheet.cell(row_index, column_index_name).value
@@ -272,13 +313,14 @@ def read_xls_file(file_path: Path, column_index_name: int = None) -> List[Tuple[
     return url_data
 
 
-def read_file(file_path: Path, column_index_name: int = None) -> List[Tuple[str, str]]:
+def read_file(file_path: Path, column_index_name: int = None, column_index_url: int = -1) -> List[Tuple[str, str]]:
     """
     Read file and extract URLs based on file extension.
 
     Args:
         file_path: Path to the file
         column_index_name: Optional column index for custom filename (0-based)
+        column_index_url: Column index where URLs are located (0-based). If -1, check all cells.
 
     Returns:
         List of tuples (URL, custom_filename) found in the file
@@ -286,11 +328,11 @@ def read_file(file_path: Path, column_index_name: int = None) -> List[Tuple[str,
     suffix = file_path.suffix.lower()
 
     if suffix == '.csv':
-        return read_csv_file(file_path, column_index_name)
+        return read_csv_file(file_path, column_index_name, column_index_url)
     elif suffix == '.xlsx':
-        return read_xlsx_file(file_path, column_index_name)
+        return read_xlsx_file(file_path, column_index_name, column_index_url)
     elif suffix == '.xls':
-        return read_xls_file(file_path, column_index_name)
+        return read_xls_file(file_path, column_index_name, column_index_url)
     else:
         print(f"Error: Unsupported file format '{suffix}'. Supported formats: .xls, .xlsx, .csv")
         return []
@@ -328,6 +370,13 @@ Examples:
         help="Column index (0-based) for custom filename. If specified, use value from this column as filename"
     )
 
+    parser.add_argument(
+        "--column-index-url",
+        type=int,
+        default=-1,
+        help="Column index (0-based) where URLs are located. If -1 (default), check all cells for URLs"
+    )
+
     args = parser.parse_args()
 
     # Convert paths to Path objects
@@ -349,7 +398,7 @@ Examples:
 
     # Read file and extract URLs with custom filenames
     print(f"Reading file: {file_path}")
-    url_data = read_file(file_path, args.column_index_name)
+    url_data = read_file(file_path, args.column_index_name, args.column_index_url)
 
     # Remove duplicates while preserving order
     seen = set()
