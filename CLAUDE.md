@@ -29,15 +29,3 @@ Original repository (upstream): andchir/batch_resize
 Proceed.
 
 Run timestamp: 2025-12-12T14:27:42.834Z
-
----
-
-Issue to solve: https://github.com/andchir/batch_resize/issues/27
-Your prepared branch: issue-27-70b1f6b0c48b
-Your prepared working directory: /tmp/gh-issue-solver-1765550377154
-Your forked repository: konard/andchir-batch_resize
-Original repository (upstream): andchir/batch_resize
-
-Proceed.
-
-Run timestamp: 2025-12-12T14:39:41.396Z
