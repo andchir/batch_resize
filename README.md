@@ -1,4 +1,4 @@
-# Batch Video Resize
+# Batch Media Tools
 
 ![Screenshot1](https://github.com/andchir/batch_resize/blob/main/media/screenshot_1.jpg?raw=true)
 
