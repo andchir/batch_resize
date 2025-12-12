@@ -271,7 +271,7 @@ Downloaded: document.docx
 ### Использование rename.py
 
 ```bash
-python rename.py <путь_к_папке> <тип_сортировки> <тип_переименования> [--prefix ПРЕФИКС] [--suffix СУФФИКС] [--dry-run]
+python rename.py <путь_к_папке> <тип_сортировки> <тип_переименования> [--prefix ПРЕФИКС] [--suffix СУФФИКС] [--dry-run] [--preview-only]
 ```
 
 Где:
@@ -286,6 +286,7 @@ python rename.py <путь_к_папке> <тип_сортировки> <тип_
 - `--prefix` - необязательный префикс для имен файлов
 - `--suffix` - необязательный суффикс для имен файлов (добавляется перед расширением)
 - `--dry-run` - предварительный просмотр изменений без фактического переименования
+- `--preview-only` - предварительный просмотр изменений без фактического переименования (аналогично --dry-run)
 
 ### Примеры rename.py
 
@@ -302,6 +303,11 @@ python rename.py ~/Documents number text_only --suffix "_edited"
 Предварительный просмотр изменений (без переименования):
 ```bash
 python rename.py ~/Files name sequential --dry-run
+```
+
+Предварительный просмотр изменений с --preview-only:
+```bash
+python rename.py ~/Files name sequential --preview-only
 ```
 
 Комбинация префикса и суффикса:
@@ -348,7 +354,7 @@ python rename.py ~/Videos number sequential
 - Обрабатывает все файлы в указанной папке (не затрагивает подпапки)
 - Сохраняет расширения файлов
 - Автоматически обрабатывает дубликаты имен (добавляет счетчик)
-- Режим `--dry-run` позволяет предварительно посмотреть результат
+- Режимы `--dry-run` и `--preview-only` позволяют предварительно посмотреть результат
 - Безопасно обрабатывает специальные символы в именах файлов
 - Выводит подробный отчет о выполненных операциях
 
@@ -393,6 +399,30 @@ Dry run mode - showing what would be renamed:
 
 ============================================================
 Dry run complete! No files were actually renamed.
+Successful: 3
+Failed: 0
+Total: 3
+============================================================
+```
+
+#### Режим preview-only:
+```
+Configuration:
+  Folder: /home/user/Photos
+  Sort by: number
+  Rename as: numbers_only
+  Mode: PREVIEW ONLY (no actual changes)
+
+Found 3 file(s) in '/home/user/Photos'
+
+Preview mode - showing what would be renamed:
+============================================================
+[1] photo_001.jpg -> 001.jpg
+[2] photo_002.jpg -> 002.jpg
+[3] photo_010.jpg -> 010.jpg
+
+============================================================
+Preview complete! No files were actually renamed.
 Successful: 3
 Failed: 0
 Total: 3

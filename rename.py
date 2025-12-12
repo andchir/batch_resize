@@ -163,7 +163,8 @@ def rename_files(
     rename_type: str,
     prefix: str = "",
     suffix: str = "",
-    dry_run: bool = False
+    dry_run: bool = False,
+    preview_only: bool = False
 ) -> Tuple[int, int]:
     """
     Rename all files in folder according to specified strategy.
@@ -175,6 +176,7 @@ def rename_files(
         prefix: Optional prefix to add to filenames
         suffix: Optional suffix to add to filenames
         dry_run: If True, only show what would be done without actually renaming
+        preview_only: If True, only show what would be done without actually renaming
 
     Returns:
         Tuple of (successful_count, failed_count)
@@ -191,8 +193,14 @@ def rename_files(
     # Sort files
     sorted_files = sort_files(files, sort_type)
 
-    if dry_run:
-        print("\nDry run mode - showing what would be renamed:")
+    # Treat preview_only the same as dry_run
+    is_preview = dry_run or preview_only
+
+    if is_preview:
+        if preview_only:
+            print("\nPreview mode - showing what would be renamed:")
+        else:
+            print("\nDry run mode - showing what would be renamed:")
         print("=" * 60)
 
     successful = 0
@@ -227,7 +235,7 @@ def rename_files(
                 failed += 1
                 continue
 
-            if dry_run:
+            if is_preview:
                 print(f"[{index}] {file_path.name} -> {new_filename}")
             else:
                 # Perform the rename
@@ -267,6 +275,9 @@ Examples:
 
   # Preview changes without renaming (dry run)
   python rename.py /path/to/folder name sequential --dry-run
+
+  # Preview changes without renaming (preview only)
+  python rename.py /path/to/folder name sequential --preview-only
 
   # Combine prefix and suffix
   python rename.py /path/to/folder number numbers_only --prefix "img_" --suffix "_final"
@@ -313,6 +324,12 @@ Examples:
         help="Show what would be renamed without actually renaming files"
     )
 
+    parser.add_argument(
+        "--preview-only",
+        action="store_true",
+        help="Show what would be renamed without actually renaming files (same as --dry-run)"
+    )
+
     args = parser.parse_args()
 
     # Convert folder path to Path object
@@ -338,6 +355,8 @@ Examples:
         print(f"  Suffix: '{args.suffix}'")
     if args.dry_run:
         print(f"  Mode: DRY RUN (no actual changes)")
+    if args.preview_only:
+        print(f"  Mode: PREVIEW ONLY (no actual changes)")
     print()
 
     # Perform renaming
@@ -347,13 +366,16 @@ Examples:
         args.rename_type,
         args.prefix,
         args.suffix,
-        args.dry_run
+        args.dry_run,
+        args.preview_only
     )
 
     # Print summary
     print("\n" + "=" * 60)
     if args.dry_run:
         print("Dry run complete! No files were actually renamed.")
+    elif args.preview_only:
+        print("Preview complete! No files were actually renamed.")
     else:
         print("Renaming complete!")
     print(f"Successful: {successful}")
