@@ -5,3 +5,15 @@ Your forked repository: konard/andchir-batch_resize
 Original repository (upstream): andchir/batch_resize
 
 Proceed.
+
+---
+
+Issue to solve: https://github.com/andchir/batch_resize/issues/23
+Your prepared branch: issue-23-2c3278f33450
+Your prepared working directory: /tmp/gh-issue-solver-1765549282350
+Your forked repository: konard/andchir-batch_resize
+Original repository (upstream): andchir/batch_resize
+
+Proceed.
+
+Run timestamp: 2025-12-12T14:21:27.151Z
