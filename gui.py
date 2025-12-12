@@ -12,7 +12,7 @@ from typing import Optional, List
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QLineEdit, QSpinBox, QCheckBox, QFileDialog,
-    QTextEdit, QProgressBar, QGroupBox, QMessageBox, QTabWidget
+    QTextEdit, QProgressBar, QGroupBox, QMessageBox, QTabWidget, QComboBox
 )
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from PyQt6.QtGui import QFont
@@ -20,6 +20,9 @@ from PyQt6.QtGui import QFont
 from main import get_video_files, resize_video, create_thumbnail
 from download import (
     read_file, get_filename_from_url, download_file
+)
+from rename import (
+    get_files_in_folder, sort_files, rename_files
 )
 
 
@@ -228,6 +231,136 @@ class FileDownloaderThread(QThread):
             })
 
 
+class FileRenamerThread(QThread):
+    """Background thread for renaming files to keep UI responsive."""
+
+    progress = pyqtSignal(int)  # Progress percentage
+    log = pyqtSignal(str)  # Log message
+    finished = pyqtSignal(dict)  # Rename statistics
+
+    def __init__(self, folder_path: Path, sort_type: str, rename_type: str,
+                 prefix: str = "", suffix: str = "", dry_run: bool = False):
+        super().__init__()
+        self.folder_path = folder_path
+        self.sort_type = sort_type
+        self.rename_type = rename_type
+        self.prefix = prefix
+        self.suffix = suffix
+        self.dry_run = dry_run
+        self._is_running = True
+
+    def stop(self):
+        """Stop renaming."""
+        self._is_running = False
+
+    def run(self):
+        """Rename files in background thread."""
+        try:
+            # Get all files
+            files = get_files_in_folder(self.folder_path)
+
+            if not files:
+                self.log.emit(f"Файлы не найдены в '{self.folder_path}'")
+                self.finished.emit({
+                    'successful': 0,
+                    'failed': 0,
+                    'total': 0
+                })
+                return
+
+            self.log.emit(f"Найдено {len(files)} файл(ов) в '{self.folder_path}'")
+
+            # Display configuration
+            self.log.emit(f"Конфигурация:")
+            self.log.emit(f"  Папка: {self.folder_path}")
+            self.log.emit(f"  Сортировка: {self.sort_type}")
+            self.log.emit(f"  Переименование: {self.rename_type}")
+            if self.prefix:
+                self.log.emit(f"  Префикс: '{self.prefix}'")
+            if self.suffix:
+                self.log.emit(f"  Суффикс: '{self.suffix}'")
+            if self.dry_run:
+                self.log.emit(f"  Режим: Предварительный просмотр (без изменений)")
+            self.log.emit("")
+
+            # Sort files
+            sorted_files = sort_files(files, self.sort_type)
+
+            if self.dry_run:
+                self.log.emit("Режим предварительного просмотра - показываются планируемые изменения:")
+                self.log.emit("=" * 60)
+
+            successful = 0
+            failed = 0
+
+            # Keep track of new names to avoid duplicates
+            used_names = set()
+
+            from rename import generate_new_filename
+
+            for index, file_path in enumerate(sorted_files, start=1):
+                if not self._is_running:
+                    self.log.emit("Переименование остановлено пользователем")
+                    break
+
+                try:
+                    # Generate new filename
+                    new_filename = generate_new_filename(
+                        file_path, index, self.rename_type, self.prefix, self.suffix
+                    )
+
+                    # Handle duplicate names by adding a counter
+                    original_new_filename = new_filename
+                    counter = 1
+                    while new_filename in used_names:
+                        # Insert counter before extension
+                        stem = Path(original_new_filename).stem
+                        ext = Path(original_new_filename).suffix
+                        new_filename = f"{stem}_{counter}{ext}"
+                        counter += 1
+
+                    used_names.add(new_filename)
+                    new_path = file_path.parent / new_filename
+
+                    # Check if target file already exists (and it's not the same file)
+                    if new_path.exists() and new_path.resolve() != file_path.resolve():
+                        self.log.emit(f"Ошибка: Целевой файл уже существует: {new_filename}")
+                        failed += 1
+                        continue
+
+                    if self.dry_run:
+                        self.log.emit(f"[{index}] {file_path.name} -> {new_filename}")
+                    else:
+                        # Perform the rename
+                        file_path.rename(new_path)
+                        self.log.emit(f"[{index}] Переименовано: {file_path.name} -> {new_filename}")
+
+                    successful += 1
+
+                except Exception as e:
+                    self.log.emit(f"Ошибка при переименовании {file_path.name}: {str(e)}")
+                    failed += 1
+
+                # Update progress
+                progress_percent = int((index) / len(sorted_files) * 100)
+                self.progress.emit(progress_percent)
+
+            # Emit final statistics
+            self.finished.emit({
+                'successful': successful,
+                'failed': failed,
+                'total': len(files)
+            })
+
+        except Exception as e:
+            self.log.emit(f"Критическая ошибка: {str(e)}")
+            self.finished.emit({
+                'successful': 0,
+                'failed': 0,
+                'total': 0
+            })
+
+
 class MainWindow(QMainWindow):
     """Main application window."""
 
@@ -235,6 +368,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.processor_thread: Optional[VideoProcessorThread] = None
         self.downloader_thread: Optional[FileDownloaderThread] = None
+        self.renamer_thread: Optional[FileRenamerThread] = None
         self.init_ui()
 
     def init_ui(self):
@@ -256,6 +390,7 @@ class MainWindow(QMainWindow):
         # Create tabs
         self.create_video_resize_tab()
         self.create_file_download_tab()
+        self.create_file_rename_tab()
 
         # Status bar
         self.statusBar().showMessage("Готов к работе")
@@ -425,6 +560,119 @@ class MainWindow(QMainWindow):
 
         # Add tab to tab widget
         self.tab_widget.addTab(download_tab, "Загрузка файлов")
+
+    def create_file_rename_tab(self):
+        """Create the file rename tab."""
+        rename_tab = QWidget()
+        tab_layout = QVBoxLayout(rename_tab)
+
+        # Title
+        title_label = QLabel("Массовое переименование файлов")
+        title_font = QFont()
+        title_font.setPointSize(16)
+        title_font.setBold(True)
+        title_label.setFont(title_font)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        tab_layout.addWidget(title_label)
+
+        # Input group
+        input_group = QGroupBox("Настройки")
+        input_layout = QVBoxLayout()
+
+        # Folder selection
+        folder_layout = QHBoxLayout()
+        folder_layout.addWidget(QLabel("Папка с файлами:"))
+        self.rename_folder_input = QLineEdit()
+        self.rename_folder_input.setPlaceholderText("Выберите папку с файлами для переименования...")
+        folder_layout.addWidget(self.rename_folder_input)
+        self.rename_browse_button = QPushButton("Обзор...")
+        self.rename_browse_button.clicked.connect(self.browse_rename_folder)
+        folder_layout.addWidget(self.rename_browse_button)
+        input_layout.addLayout(folder_layout)
+
+        # Sort type selection
+        sort_layout = QHBoxLayout()
+        sort_layout.addWidget(QLabel("Сортировка:"))
+
+        self.rename_sort_combo = QComboBox()
+        self.rename_sort_combo.addItem("По имени (алфавитная)", "name")
+        self.rename_sort_combo.addItem("По числу в имени", "number")
+        sort_layout.addWidget(self.rename_sort_combo)
+        sort_layout.addStretch()
+        input_layout.addLayout(sort_layout)
+
+        # Rename type selection
+        rename_type_layout = QHBoxLayout()
+        rename_type_layout.addWidget(QLabel("Тип переименования:"))
+        self.rename_type_combo = QComboBox()
+        self.rename_type_combo.addItem("Последовательная нумерация (1, 2, 3, ...)", "sequential")
+        self.rename_type_combo.addItem("Только цифры из имени", "numbers_only")
+        self.rename_type_combo.addItem("Только текст из имени", "text_only")
+        rename_type_layout.addWidget(self.rename_type_combo)
+        rename_type_layout.addStretch()
+        input_layout.addLayout(rename_type_layout)
+
+        # Prefix input
+        prefix_layout = QHBoxLayout()
+        prefix_layout.addWidget(QLabel("Префикс (необязательно):"))
+        self.rename_prefix_input = QLineEdit()
+        self.rename_prefix_input.setPlaceholderText("Например: photo_")
+        prefix_layout.addWidget(self.rename_prefix_input)
+        prefix_layout.addStretch()
+        input_layout.addLayout(prefix_layout)
+
+        # Suffix input
+        suffix_layout = QHBoxLayout()
+        suffix_layout.addWidget(QLabel("Суффикс (необязательно):"))
+        self.rename_suffix_input = QLineEdit()
+        self.rename_suffix_input.setPlaceholderText("Например: _edited")
+        suffix_layout.addWidget(self.rename_suffix_input)
+        suffix_layout.addStretch()
+        input_layout.addLayout(suffix_layout)
+
+        # Dry run checkbox
+        self.rename_dry_run_checkbox = QCheckBox("Предварительный просмотр (не переименовывать файлы)")
+        self.rename_dry_run_checkbox.setChecked(True)  # Enable by default for safety
+        input_layout.addWidget(self.rename_dry_run_checkbox)
+
+        input_group.setLayout(input_layout)
+        tab_layout.addWidget(input_group)
+
+        # Progress bar
+        self.rename_progress_bar = QProgressBar()
+        self.rename_progress_bar.setValue(0)
+        tab_layout.addWidget(self.rename_progress_bar)
+
+        # Log output
+        log_group = QGroupBox("Журнал переименования")
+        log_layout = QVBoxLayout()
+        self.rename_log_text = QTextEdit()
+        self.rename_log_text.setReadOnly(True)
+        self.rename_log_text.setMaximumHeight(200)
+        log_layout.addWidget(self.rename_log_text)
+        log_group.setLayout(log_layout)
+        tab_layout.addWidget(log_group)
+
+        # Control buttons
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+
+        self.rename_start_button = QPushButton("Начать переименование")
+        self.rename_start_button.clicked.connect(self.start_renaming)
+        self.rename_start_button.setMinimumWidth(150)
+        button_layout.addWidget(self.rename_start_button)
+
+        self.rename_stop_button = QPushButton("Остановить")
+        self.rename_stop_button.clicked.connect(self.stop_renaming)
+        self.rename_stop_button.setEnabled(False)
+        self.rename_stop_button.setMinimumWidth(150)
+        button_layout.addWidget(self.rename_stop_button)
+
+        button_layout.addStretch()
+        tab_layout.addLayout(button_layout)
+
+        # Add tab to tab widget
+        self.tab_widget.addTab(rename_tab, "Переименование файлов")
 
     def browse_folder(self):
         """Open folder browser dialog."""
@@ -663,6 +911,125 @@ class MainWindow(QMainWindow):
                 "Загрузка завершена",
                 f"Успешно загружено: {stats['successful']}/{stats['total']}"
             )
+
+    def browse_rename_folder(self):
+        """Open folder browser dialog for rename folder."""
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Выберите папку с файлами для переименования",
+            "",
+            QFileDialog.Option.ShowDirsOnly
+        )
+        if folder:
+            self.rename_folder_input.setText(folder)
+
+    def start_renaming(self):
+        """Start file renaming."""
+        # Validate input
+        folder_path = self.rename_folder_input.text().strip()
+        if not folder_path:
+            QMessageBox.warning(
+                self,
+                "Ошибка",
+                "Пожалуйста, выберите папку с файлами"
+            )
+            return
+
+        folder_path = Path(folder_path)
+        if not folder_path.exists() or not folder_path.is_dir():
+            QMessageBox.warning(
+                self,
+                "Ошибка",
+                f"Папка '{folder_path}' не существует или не является директорией"
+            )
+            return
+
+        # Clear log and reset progress
+        self.rename_log_text.clear()
+        self.rename_progress_bar.setValue(0)
+
+        # Disable start button, enable stop button
+        self.rename_start_button.setEnabled(False)
+        self.rename_stop_button.setEnabled(True)
+        self.rename_browse_button.setEnabled(False)
+
+        # Get settings
+        sort_type = self.rename_sort_combo.currentData()
+        rename_type = self.rename_type_combo.currentData()
+        prefix = self.rename_prefix_input.text()
+        suffix = self.rename_suffix_input.text()
+        dry_run = self.rename_dry_run_checkbox.isChecked()
+
+        # Start renaming thread
+        self.renamer_thread = FileRenamerThread(
+            folder_path,
+            sort_type,
+            rename_type,
+            prefix,
+            suffix,
+            dry_run
+        )
+        self.renamer_thread.progress.connect(self.update_rename_progress)
+        self.renamer_thread.log.connect(self.add_rename_log)
+        self.renamer_thread.finished.connect(self.renaming_finished)
+        self.renamer_thread.start()
+
+        self.statusBar().showMessage("Переименование...")
+
+    def stop_renaming(self):
+        """Stop file renaming."""
+        if self.renamer_thread and self.renamer_thread.isRunning():
+            self.renamer_thread.stop()
+            self.add_rename_log("Остановка переименования...")
+            self.rename_stop_button.setEnabled(False)
+
+    def update_rename_progress(self, value: int):
+        """Update rename progress bar."""
+        self.rename_progress_bar.setValue(value)
+
+    def add_rename_log(self, message: str):
+        """Add message to rename log."""
+        self.rename_log_text.append(message)
+        # Auto-scroll to bottom
+        cursor = self.rename_log_text.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        self.rename_log_text.setTextCursor(cursor)
+
+    def renaming_finished(self, stats: dict):
+        """Handle renaming completion."""
+        # Re-enable buttons
+        self.rename_start_button.setEnabled(True)
+        self.rename_stop_button.setEnabled(False)
+        self.rename_browse_button.setEnabled(True)
+
+        # Show summary
+        self.add_rename_log("\n" + "=" * 50)
+        if self.rename_dry_run_checkbox.isChecked():
+            self.add_rename_log("Предварительный просмотр завершен! Файлы не были переименованы.")
+        else:
+            self.add_rename_log("Переименование завершено!")
+        self.add_rename_log(f"Успешно: {stats['successful']}")
+        self.add_rename_log(f"Ошибок: {stats['failed']}")
+        self.add_rename_log(f"Всего: {stats['total']}")
+        self.add_rename_log("=" * 50)
+
+        self.statusBar().showMessage("Готов к работе")
+
+        # Show completion message
+        if stats['total'] > 0:
+            if self.rename_dry_run_checkbox.isChecked():
+                QMessageBox.information(
+                    self,
+                    "Предварительный просмотр завершен",
+                    f"Просмотрено: {stats['successful']}/{stats['total']} файлов\n\n"
+                    "Снимите галочку 'Предварительный просмотр' для фактического переименования."
+                )
+            else:
+                QMessageBox.information(
+                    self,
+                    "Переименование завершено",
+                    f"Успешно переименовано: {stats['successful']}/{stats['total']}"
+                )
 
 
 def main():
