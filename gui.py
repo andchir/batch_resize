@@ -1151,7 +1151,7 @@ class MainWindow(QMainWindow):
         self.add_download_log(self.translator.get("errors", stats['failed']))
         self.add_download_log(self.translator.get("skipped", stats['skipped']))
         if stats.get('renamed', 0) > 0:
-            self.add_download_log(self.translator.get("renamed", stats['renamed']))
+            self.add_download_log(self.translator.get("renamed_count", stats['renamed']))
         self.add_download_log(self.translator.get("total_urls", stats['total']))
         self.add_download_log("=" * 50)
 
